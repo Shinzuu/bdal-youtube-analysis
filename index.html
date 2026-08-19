@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>YouTube Data Analysis on Hadoop — MapReduce + Pig Lab Report</title>
+<meta name="description" content="BDAL lab report: 3 MapReduce jobs + 5 Pig jobs analysing the SFU YouTube dataset on Hadoop 3.4.1, with code, execution logs and verified results.">
+<style>
+ :root{--paper:#F7F5F0;--ink:#1c1e21;--muted:#6b6f76;--accent:#C4302B;--pig:#5b8a2b;
+   --term-bg:#14181D;--term-fg:#d8dee6;--ok:#2e9e5b;--line:#e3ded3;}
+ *{box-sizing:border-box;margin:0;padding:0}
+ body{background:var(--paper);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+   max-width:860px;margin:0 auto;padding:22px 16px 90px}
+ h1{font:700 1.5rem/1.2 ui-monospace,Menlo,monospace;letter-spacing:-.5px}
+ h1 .yt{background:var(--accent);color:#fff;padding:2px 9px;border-radius:5px}
+ h2{font:700 1.15rem ui-monospace,Menlo,monospace;margin:36px 0 10px;padding-bottom:6px;border-bottom:2px solid var(--accent)}
+ h2.pig{border-color:var(--pig);color:var(--pig)}
+ h3{font:700 1.02rem ui-monospace,Menlo,monospace;margin:0 0 6px}
+ .sub{color:var(--muted);font-size:.92rem;margin:6px 0 16px}
+ .meta{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:.9rem;margin:12px 0}
+ .meta b{color:var(--ink)}
+ .credit{background:#fff4f3;border:1px solid #f1c9c6;border-radius:10px;padding:12px 16px;font-size:.9rem;margin:14px 0}
+ .job{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:16px 0}
+ .pat{font-size:.86rem;color:var(--muted);margin-bottom:6px}
+ .desc{font-size:.94rem;margin-bottom:10px}
+ .lbl{font:700 .74rem ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.06em;
+   color:var(--muted);margin:14px 0 4px}
+ .cmd{display:flex;align-items:stretch;border-radius:8px;overflow:hidden;border:1px solid #2a3038;margin:6px 0}
+ .cmd code{flex:1;background:var(--term-bg);color:var(--term-fg);padding:9px 12px;
+   font:13px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+ .cmd code::before{content:"$ ";color:#e2938f;font-weight:700}
+ .cmd .copy,.filewrap .copy{border:0;background:#232a33;color:var(--term-fg);cursor:pointer;padding:0 14px;
+   font:12px ui-monospace,Menlo,monospace;min-width:70px}
+ .cmd .copy:active,.filewrap .copy:active{background:var(--accent);color:#fff}
+ details.code{margin:6px 0;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fbfaf7}
+ details.code>summary{cursor:pointer;padding:9px 12px;font:700 .85rem ui-monospace,Menlo,monospace;list-style:none}
+ details.code>summary::-webkit-details-marker{display:none}
+ details.code[open]>summary{border-bottom:1px solid var(--line)}
+ .filewrap{position:relative}
+ .filewrap pre{background:#0f1620;color:#c9e7ff;padding:12px 14px;overflow-x:auto;
+   font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;white-space:pre}
+ .filewrap .copy{position:absolute;top:8px;right:8px;border-radius:6px}
+ .out{background:var(--term-bg);color:#9fe3b8;border-radius:8px;padding:10px 12px;overflow-x:auto;
+   font:12.5px/1.45 ui-monospace,Menlo,Consolas,monospace;white-space:pre;margin-top:4px}
+ .out.log{color:#b8c4d0;max-height:230px;overflow-y:auto}
+ .out.res{color:#ffe6a0}
+ .rn{font-size:.78rem;color:var(--muted);margin:4px 0 0}
+ .warn{font-size:.86rem;background:#fff6dd;border:1px solid #eeddab;border-radius:8px;padding:9px 12px;margin:8px 0}
+ .ok{font-size:.86rem;background:#eef7f0;border:1px solid #cfe6d5;border-radius:8px;padding:9px 12px;margin-top:8px}
+ table.ds{border-collapse:collapse;font-size:.85rem;margin:8px 0;width:100%}
+ table.ds td,table.ds th{border:1px solid var(--line);padding:4px 8px;text-align:left}
+ table.ds th{background:#f0ece2}
+ code.inl{background:#eef1f5;padding:1px 5px;border-radius:4px;font-size:.85em}
+ a{color:var(--accent)}
+ .toc{background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px 16px;font-size:.9rem;margin:14px 0}
+ .toc a{text-decoration:none} .toc li{margin:2px 0}
+ footer{margin-top:40px;padding-top:16px;border-top:1px solid var(--line);font-size:.82rem;color:var(--muted)}
+</style></head><body>
+
+<h1><span class="yt">▶</span> YouTube Data Analysis on Hadoop</h1>
+<p class="sub">BDAL lab report — 3 MapReduce jobs + 5 Apache Pig jobs over the SFU YouTube dataset.
+Every job was compiled/adapted for <b>Hadoop 3.4.1</b>, executed on a live pseudo-distributed cluster,
+and its result independently verified.</p>
+
+<div class="meta">
+ <b>Course:</b> Big Data Analytics Lab (BDAL) &nbsp;·&nbsp; <b>Environment:</b> Hadoop 3.4.1 (pseudo-distributed),
+ Apache Pig 0.17.0, OpenJDK 11, Linux.<br>
+ <b>Dataset:</b> SFU YouTube crawl (0302), cleaned to <b>10,296 videos</b>, 9 fields, 13 categories.
+</div>
+
+<div class="credit">
+ 📌 <b>Reference implementation:</b> the MapReduce &amp; Pig solutions are based on
+ <a href="https://github.com/SiddhiPrabhu1995/YouTube-Data-Analysis-using-Hadoop">SiddhiPrabhu1995/YouTube-Data-Analysis-using-Hadoop</a>.
+ Their code targets Hadoop 2; this report adapts it to run on Hadoop 3.4.1 (delimiter + input path,
+ a reducer-state fix in MR-1, and a nested-sort rewrite for the Pig <code class="inl">ORDER BY</code> jobs — noted per job).
+</div>
+
+<div class="toc"><b>Jobs</b>
+ <ul>
+  <li><a href="#dataset">Dataset &amp; setup</a></li>
+  <li><a href="#mr1">MR-1 Top Viewed Video</a> · <a href="#mr2">MR-2 Rating Summarization</a> · <a href="#mr3">MR-3 Videos per Uploader</a></li>
+  <li><a href="#pig1">Pig-1 Top 5 Categories</a> · <a href="#pig2">Pig-2 Top 10 Rated</a> · <a href="#pig3">Pig-3 Top 10 Viewed</a>
+      · <a href="#pig4">Pig-4 Rated by Category</a> · <a href="#pig5">Pig-5 Viewed by Category</a></li>
+ </ul>
+</div>
+
+<h2 id="dataset">Dataset &amp; setup</h2>
+<p class="desc">Source: <a href="https://netsg.cs.sfu.ca/youtubedata/">SFU YouTube dataset</a> (tab-delimited crawl).
+Fields kept (the trailing related-video IDs are dropped):</p>
+<table class="ds">
+ <tr><th>#</th><th>field</th><th>type</th><th>example</th></tr>
+ <tr><td>1</td><td>videoID</td><td>string</td><td>bRPeEVpHiI8</td></tr>
+ <tr><td>2</td><td>uploader</td><td>string</td><td>ufc</td></tr>
+ <tr><td>3</td><td>age (days)</td><td>int</td><td>744</td></tr>
+ <tr><td>4</td><td>category</td><td>string</td><td>Sports</td></tr>
+ <tr><td>5</td><td>length (s)</td><td>int</td><td>154</td></tr>
+ <tr><td>6</td><td>views</td><td>int</td><td>331333</td></tr>
+ <tr><td>7</td><td>rate</td><td>float</td><td>3.32</td></tr>
+ <tr><td>8</td><td>ratings</td><td>int</td><td>1284</td></tr>
+ <tr><td>9</td><td>comments</td><td>int</td><td>103</td></tr>
+</table>
+<p class="lbl">Prepare the data (tab → clean 9-field comma CSV)</p>
+<div class="cmd"><code>cat 0.txt 1.txt 2.txt | tr -d &#x27;\r&#x27; | awk -F&#x27;\t&#x27; &#x27;NF&gt;=9 &amp;&amp; $4!=&quot;&quot; {print $1&quot;,&quot;$2&quot;,&quot;$3&quot;,&quot;$4&quot;,&quot;$5&quot;,&quot;$6&quot;,&quot;$7&quot;,&quot;$8&quot;,&quot;$9}&#x27; &gt; youtube.csv</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Start the cluster (6 daemons incl. JobHistoryServer) &amp; stage data</p>
+<div class="cmd"><code>start-dfs.sh &amp;&amp; start-yarn.sh &amp;&amp; mapred --daemon start historyserver</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -mkdir -p /youtube &amp;&amp; hdfs dfs -put -f youtube.csv /youtube/</code><button class="copy" data-src="code">copy</button></div>
+<div class="warn">Without the JobHistoryServer (port 10020) MapReduce jobs still succeed but spam
+<code class="inl">Retrying connect to server: 0.0.0.0:10020</code>. Start it to keep logs clean.</div>
+
+<h2>Part A · MapReduce (3 jobs)</h2>
+<section class="job" id="mr1">
+<h3>MR-1 · Top Viewed Video (by Video ID)</h3>
+<p class="pat"><b>Design pattern:</b> Filtering / Numerical Summarization (global max)</p>
+<p class="desc">Emit (videoID, views) for every record; the reducer tracks the single maximum across all keys and emits it in <code>cleanup()</code>. Answers: which video has the most views.</p>
+<div class="warn">⚠ The original reducer used <code>static</code> <code>sum</code>/<code>max</code> that were never reset between keys, so it emitted a running <i>total</i> of all views (~97.6M) instead of the per-video max. Fixed to instance fields + a per-key local <code>sum</code>.</div>
+<p class="lbl">Code</p>
+<details class="code"><summary>📄 DriverClass.java</summary><div class="filewrap"><pre>package top_viewed_video;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import java.io.IOException;
+
+public class DriverClass {
+	
+	public static void main(String[] args) throws IOException, InterruptedException, ClassNotFoundException{
+		Configuration conf = new Configuration();
+		
+        Job job = new Job(conf, &quot;Top Videos&quot;);
+        job.setJarByClass(DriverClass.class);
+        
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+        
+        job.setInputFormatClass(TextInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
+        
+        job.setMapOutputKeyClass(Text.class);
+        job.setMapOutputValueClass(FloatWritable.class);
+        
+        job.setMapperClass(MapperClass.class);
+        job.setReducerClass(ReducerClass.class);
+        
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(FloatWritable.class);
+        
+        System.exit(job.waitForCompletion(true)?0:1);
+        //job.waitForCompletion(true);
+	}
+
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<details class="code"><summary>📄 MapperClass.java</summary><div class="filewrap"><pre>package top_viewed_video;
+
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+import java.io.IOException;
+
+public class MapperClass extends Mapper&lt;LongWritable, Text, Text, FloatWritable&gt; {
+
+    private Text video_name = new Text();
+    private FloatWritable views = new FloatWritable();
+
+    @Override
+    public void map(LongWritable key, Text value, Context context)
+            throws IOException, InterruptedException {
+        String line = value.toString();
+        String str[] = line.split(&quot;,&quot;);
+
+        if (str.length &gt;= 5) {
+            video_name.set(str[0]);
+               try {
+            	   float temp = Float.parseFloat(str[5]); //typecasting string to Integer
+            	   views.set(temp);
+            	   context.write(video_name, views);
+               }catch(Exception e){
+            	   e.printStackTrace();
+               }
+               
+                //views.set(temp);
+            }                  
+        
+    }
+
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<details class="code"><summary>📄 ReducerClass.java (fixed)</summary><div class="filewrap"><pre>package top_viewed_video;
+
+import java.io.IOException;
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Reducer;
+
+public class ReducerClass extends Reducer&lt;Text, FloatWritable, Text, FloatWritable&gt; {
+    // FIX: instance (not static) so state is per-reducer, and finalKey/max track the
+    // global maximum across keys. Original used `static int sum` that was never reset,
+    // so it accumulated a running TOTAL of all views instead of the per-video max.
+    private float max = 0;
+    private String finalKey = &quot;&quot;;
+
+    @Override
+    public void reduce(Text key, Iterable&lt;FloatWritable&gt; values, Context context)
+            throws IOException, InterruptedException {
+        float sum = 0;                 // FIX: local, reset per key
+        for (FloatWritable val : values) {
+            sum += val.get();
+        }
+        if (sum &gt; max) {
+            max = sum;
+            finalKey = key.toString();
+        }
+    }
+
+    @Override
+    protected void cleanup(Context context) throws IOException, InterruptedException {
+        context.write(new Text(finalKey), new FloatWritable(max));
+    }
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>hadoop jar TopViewed.jar top_viewed_video.DriverClass /youtube/youtube.csv /youtube/out_topviewed</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat /youtube/out_topviewed/part-r-00000</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">mapreduce.Job: Running job: job_1787128484432_0011
+mapreduce.Job:  map 0% reduce 0%
+mapreduce.Job:  map 100% reduce 0%
+mapreduce.Job:  map 100% reduce 100%
+mapreduce.Job: Job job_1787128484432_0011 completed successfully
+		FILE: Number of bytes read=185334
+		FILE: Number of bytes written=990607
+		HDFS: Number of bytes read=563927
+		HDFS: Number of bytes written=22
+		HDFS: Number of bytes read erasure-coded=0
+		Map input records=10296
+		Map output records=10296
+		Reduce input records=10296
+		Reduce output records=1</div>
+<p class="lbl">Result</p>
+<div class="out res">DQRVFILbEi4	2055258.0</div><p class="rn">1 rows total</p>
+<div class="ok">✔ Independently confirmed with awk: max of column 6 = DQRVFILbEi4 with 2,055,258 views.</div>
+</section>
+<section class="job" id="mr2">
+<h3>MR-2 · Rating Summarization (by Video ID)</h3>
+<p class="pat"><b>Design pattern:</b> Numerical Summarization (min / max / count)</p>
+<p class="desc">For each video the mapper emits a <code>MinMaxCountTuple</code> of (rate, ratings, comments); the reducer combines them per key. With unique video IDs each row summarises one video: <code>rate&nbsp;·&nbsp;ratings&nbsp;·&nbsp;total&nbsp;comments</code>.</p>
+<p class="lbl">Code</p>
+<details class="code"><summary>📄 Rating_Summarization.java</summary><div class="filewrap"><pre>package com.neu.bigdata;
+
+import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+
+public class Rating_Summarization {
+
+    /**
+     * @param args the command line arguments
+     */
+    public static void main(String[] args) throws IOException {
+        try {
+            Configuration conf = new Configuration();
+            Job job = Job.getInstance(conf, &quot;VideoMinMaxRating&quot;);
+            job.setJarByClass(Rating_Summarization.class);
+            job.setMapperClass(MapperClass.class);
+            job.setCombinerClass(ReducerClass.class);
+            job.setReducerClass(ReducerClass.class);
+            job.setOutputKeyClass(Text.class);
+            job.setOutputValueClass(MinMaxCountTuple.class);
+            FileInputFormat.addInputPath(job, new Path(args[0]));
+            FileOutputFormat.setOutputPath(job, new Path(args[1]));
+            System.exit(job.waitForCompletion(true) ? 0 : 1);
+        } catch (InterruptedException | ClassNotFoundException ex) {
+            Logger.getLogger(Rating_Summarization.class.getName()).log(Level.SEVERE, null, ex);
+        }
+    }
+
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<details class="code"><summary>📄 MapperClass.java</summary><div class="filewrap"><pre>package com.neu.bigdata;
+
+
+import java.io.IOException;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+
+class MapperClass extends Mapper&lt;Object, Text, Text, MinMaxCountTuple&gt; {
+
+    private Text video_ID = new Text();
+    private MinMaxCountTuple outTuple = new MinMaxCountTuple();
+
+    protected void map(Object key, Text value, Context context) throws IOException, InterruptedException {
+
+        String[] input = value.toString().split(&quot;,&quot;);
+
+        video_ID.set(input[0]);
+        if(input.length &gt; 8) {
+        try {
+        outTuple.setTotalRating(Float.valueOf(input[7]));
+        outTuple.setAverageRating(Float.valueOf(input[6]));
+        outTuple.setTotalComment(Float.valueOf(input[8]));
+
+        context.write(video_ID, outTuple);
+        }catch(Exception e) {
+        	e.getStackTrace();
+        }
+        }
+    }
+
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<details class="code"><summary>📄 ReducerClass.java</summary><div class="filewrap"><pre>package com.neu.bigdata;
+
+import java.io.IOException;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Reducer;
+
+class ReducerClass extends Reducer&lt;Text, MinMaxCountTuple, Text, MinMaxCountTuple&gt; {
+
+    private MinMaxCountTuple result = new MinMaxCountTuple();
+
+    @Override
+    protected void reduce(Text key, Iterable&lt;MinMaxCountTuple&gt; values, Context context) throws IOException, InterruptedException {
+        // Initialize our result
+        result.setAverageRating(0);
+        result.setTotalRating(0);
+        result.setTotalComment(0);
+        int sum = 0;
+
+        for (MinMaxCountTuple val : values) {
+        	//max
+            if (result.getAverageRating()== 0 || val.getAverageRating() &lt; result.getAverageRating()) {
+                result.setAverageRating(val.getAverageRating());
+            }
+            //min
+            if (result.getTotalRating()== 0
+                    || val.getTotalRating() &gt; (result.getTotalRating())) {
+                result.setTotalRating(val.getTotalRating());
+            }
+            //sum
+            sum += val.getTotalComment();
+
+        }
+        result.setTotalComment(sum);
+        context.write(key, result);
+    }
+
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<details class="code"><summary>📄 MinMaxCountTuple.java</summary><div class="filewrap"><pre>package com.neu.bigdata;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+import org.apache.hadoop.io.Writable;
+
+
+public class MinMaxCountTuple implements Writable {
+
+    private float averageRating;
+    private float totalRating;
+    private float totalComment;
+
+    public float getAverageRating() {
+        return averageRating;
+    }
+
+    public void setAverageRating(float averageRating) {
+        this.averageRating = averageRating;
+    }
+
+    public float getTotalRating() {
+        return totalRating;
+    }
+
+    public void setTotalRating(float totalRating) {
+        this.totalRating = totalRating;
+    }    
+    
+    public float getTotalComment() {
+        return totalComment;
+    }
+
+    public void setTotalComment(float totalComment) {
+        this.totalComment = totalComment;
+    }
+
+    //@Override
+    public void write(DataOutput d) throws IOException {
+        d.writeFloat(averageRating);
+        d.writeFloat(totalRating);
+        d.writeFloat(totalComment);
+
+    }
+
+    //@Override
+    public void readFields(DataInput di) throws IOException {
+        averageRating = di.readFloat();
+        totalRating = di.readFloat();
+        totalComment = di.readFloat();
+
+    }
+
+    @Override
+    public String toString() {
+        return (averageRating + &quot;\t&quot; + totalRating + &quot;\t&quot; + totalComment);
+    }
+
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>hadoop jar RatingSummarization.jar com.neu.bigdata.Rating_Summarization /youtube/youtube.csv /youtube/out_rs</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat /youtube/out_rs/part-r-00000 | head</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">mapreduce.Job: Running job: job_1787128484432_0012
+mapreduce.Job:  map 0% reduce 0%
+mapreduce.Job:  map 100% reduce 0%
+mapreduce.Job:  map 100% reduce 100%
+mapreduce.Job: Job job_1787128484432_0012 completed successfully
+		FILE: Number of bytes read=267702
+		FILE: Number of bytes written=1154091
+		HDFS: Number of bytes read=563927
+		HDFS: Number of bytes written=258984
+		HDFS: Number of bytes read erasure-coded=0
+		Map input records=10296
+		Map output records=10296
+		Reduce input records=10296
+		Reduce output records=10296</div>
+<p class="lbl">Result</p>
+<div class="out res">--nL8YJJFxU	4.85	61.0	48.0
+-1UxkSmhsVk	5.0	2.0	0.0
+-3YqEPhSk-0	4.91	56.0	12.0
+-3c0dGoAvBk	4.89	180.0	27.0
+-3ulfmCfT94	4.91	33.0	11.0
+-4pjYeUdWls	4.94	281.0	11.0
+-5_Jqln8vvg	5.0	1.0	0.0
+-6ByZH3CDgQ	5.0	10.0	5.0
+-6HdcvY_Els	5.0	2.0	0.0
+-6LbZzLsaZ8	4.39	33.0	22.0
+-6OKN-NQn7c	4.97	29.0	11.0
+-6PZcJEwpIw	4.0	7.0	2.0
+… (10284 more rows)</div><p class="rn">10296 rows total</p>
+</section>
+<section class="job" id="mr3">
+<h3>MR-3 · Videos per Uploader (Best YouTuber by uploads)</h3>
+<p class="pat"><b>Design pattern:</b> Counting / Summarization</p>
+<p class="desc">Classic word-count pattern keyed on the uploader: the mapper emits (uploader, 1); the reducer sums. Sorting the output gives the most prolific channels.</p>
+<p class="lbl">Code</p>
+<details class="code"><summary>📄 Youtubetopuploader.java</summary><div class="filewrap"><pre>package youtubeuploader;
+
+import java.io.IOException;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.fs.Path;
+
+public class Youtubetopuploader {
+
+    public static class Map extends Mapper&lt;LongWritable, Text, Text, IntWritable&gt; {
+
+        private Text uploader = new Text();
+        private final static IntWritable occurance = new IntWritable(1);
+
+        @Override
+        public void map(LongWritable key, Text value,
+            Context context) throws IOException, InterruptedException {
+
+            String record = value.toString();
+            String str[] = record.split(&quot;,&quot;);
+            if (str.length &gt;= 7) {
+                uploader.set(str[1]);
+            }
+            context.write(uploader, occurance);
+        }
+    }
+
+    public static class Reduce extends Reducer&lt;Text, IntWritable, Text, IntWritable&gt; {
+
+        @Override
+        public void reduce(Text key, Iterable&lt;IntWritable&gt; values,
+                Context context) throws IOException, InterruptedException {
+            int totaloccurance = 0;
+
+            for (IntWritable value : values) {
+                totaloccurance += value.get();
+            }
+            context.write(key, new IntWritable(totaloccurance));
+
+        }
+
+    }
+
+    public static void main(String[] args) throws IOException, ClassNotFoundException, InterruptedException {
+
+        Configuration conf1 = new Configuration();
+
+        @SuppressWarnings(&quot;deprecation&quot;)
+        Job job = new Job(conf1, &quot;myyoutube&quot;);
+
+        job.setJarByClass(Youtubetopuploader.class);
+        job.setMapperClass(Map.class);
+        job.setReducerClass(Reduce.class);
+
+        job.setOutputKeyClass(Text.class);
+        job.setOutputValueClass(IntWritable.class);
+
+        job.setInputFormatClass(TextInputFormat.class);
+        job.setOutputFormatClass(TextOutputFormat.class);
+
+        FileInputFormat.addInputPath(job, new Path(args[0]));
+        FileOutputFormat.setOutputPath(job, new Path(args[1]));
+
+        System.exit(job.waitForCompletion(true) ? 0 : 1);
+    }
+
+}</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>hadoop jar Uploader.jar youtubeuploader.Youtubetopuploader /youtube/youtube.csv /youtube/out_uploader</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat /youtube/out_uploader/part-r-00000 | sort -t$&#x27;\t&#x27; -k2 -nr | head -10</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">mapreduce.Job: Running job: job_1787128484432_0013
+mapreduce.Job:  map 0% reduce 0%
+mapreduce.Job:  map 100% reduce 0%
+mapreduce.Job:  map 100% reduce 100%
+mapreduce.Job: Job job_1787128484432_0013 completed successfully
+		FILE: Number of bytes read=176677
+		FILE: Number of bytes written=972571
+		HDFS: Number of bytes read=563927
+		HDFS: Number of bytes written=88608
+		HDFS: Number of bytes read erasure-coded=0
+		Map input records=10296
+		Map output records=10296
+		Reduce input records=10296
+		Reduce output records=6742</div>
+<p class="lbl">Result</p>
+<div class="out res">nrxd	66
+smartenupnascom	48
+barrock81	39
+degavabu	31
+GreekCallas	30
+LostSpoilers	28
+suiton18	27
+somoros	26
+CBS	25
+kaneyang	24</div><p class="rn">10 rows total</p>
+<div class="ok">✔ Top uploader independently confirmed with awk: nrxd with 66 uploads.</div>
+</section>
+
+<h2 class="pig">Part B · Apache Pig (5 jobs)</h2>
+<div class="warn">Pig 0.17.0 predates Hadoop 3; a top-level <code class="inl">ORDER BY</code> crashes with
+<code class="inl">Deserialization error: null</code> (broken range-partition sampler). Fix: sort <i>nested</i>
+inside a <code class="inl">FOREACH</code> (group → nested ORDER BY → LIMIT), which sorts within the reducer
+and avoids the sampler. All 5 scripts below use that pattern and run cleanly on Hadoop 3.4.1.</div>
+<section class="job" id="pig1">
+<h3>Pig-1 · Top 5 Categories (by video count)</h3>
+<p class="desc">Group by category, count videos, keep the top 5.</p>
+<p class="lbl">Pig script</p>
+<details class="code"><summary>📄 top5Categories.pig</summary><div class="filewrap"><pre>infiles = load &#x27;/youtube/youtube.csv&#x27; using PigStorage(&#x27;,&#x27;) as (videoid:chararray,uploader:chararray,age:int,category:chararray,length:int,views:int,rate:float,rating:int,comments:int);
+files = FILTER infiles BY category is not null;
+grpn_for_catagories = GROUP files BY category;
+cnt_for_catagories = FOREACH grpn_for_catagories GENERATE group AS category, COUNT(files.videoid) AS counting;
+grp_all = GROUP cnt_for_catagories ALL;
+top5_for_catagories = FOREACH grp_all {
+    srt = ORDER cnt_for_catagories BY counting DESC;
+    lim = LIMIT srt 5;
+    GENERATE FLATTEN(lim);
+};
+STORE top5_for_catagories INTO &#x27;Top5Catagories.txt&#x27; USING PigStorage(&#x27;|&#x27;);</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>pig -x mapreduce -f top5Categories.pig</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat Top5Catagories.txt/part-*</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">2026-08-19 14:44:47,516 [main] INFO  org.apache.pig.tools.pigstats.ScriptState - Pig features used in the script: GROUP_BY,FILTER
+2026-08-19 14:44:48,908 [JobControl] INFO  org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil - Total input paths to process : 1
+2026-08-19 14:45:11,329 [JobControl] INFO  org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil - Total input paths to process : 1
+Success!
+Input(s):
+Successfully read 10296 records (564189 bytes) from: &quot;/youtube/youtube.csv&quot;
+Output(s):
+Total records written : 5
+2026-08-19 14:45:42,736 [main] INFO  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher - Success!</div>
+<p class="lbl">Result</p>
+<div class="out res">Music|2762
+Entertainment|1725
+Comedy|1281
+Film &amp; Animation|1240
+People &amp; Blogs|840</div><p class="rn">5 rows total</p>
+</section>
+<section class="job" id="pig2">
+<h3>Pig-2 · Top 10 Rated Videos</h3>
+<p class="desc">Order all videos by number of ratings, keep the top 10 → (videoID, category, ratings).</p>
+<p class="lbl">Pig script</p>
+<details class="code"><summary>📄 top10Rated.pig</summary><div class="filewrap"><pre>infiles = load &#x27;/youtube/youtube.csv&#x27; using PigStorage(&#x27;,&#x27;) as (videoid:chararray,uploader:chararray,age:int,category:chararray,length:int,views:int,rate:float,rating:int,comments:int);
+files = FILTER infiles BY category is not null;
+grp_all = GROUP files ALL;
+top10 = FOREACH grp_all {
+    srt = ORDER files BY rating DESC;
+    lim = LIMIT srt 10;
+    GENERATE FLATTEN(lim);
+};
+final_top10_rated_video = FOREACH top10 GENERATE $0, $3, $7;
+STORE final_top10_rated_video INTO &#x27;Top10Rated.txt&#x27; USING PigStorage(&#x27;|&#x27;);</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>pig -x mapreduce -f top10Rated.pig</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat Top10Rated.txt/part-*</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">2026-08-19 14:45:50,109 [main] INFO  org.apache.pig.tools.pigstats.ScriptState - Pig features used in the script: GROUP_BY,FILTER
+2026-08-19 14:45:51,476 [JobControl] INFO  org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil - Total input paths to process : 1
+Success!
+Input(s):
+Successfully read 10296 records (564189 bytes) from: &quot;/youtube/youtube.csv&quot;
+Output(s):
+Total records written : 10
+2026-08-19 14:46:18,286 [main] INFO  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher - Success!</div>
+<p class="lbl">Result</p>
+<div class="out res">aFbEBVuVHZc|Pets &amp; Animals|3791
+4j9vBxBB42I|News &amp; Politics|3291
+XvG3IK-hzRs|Entertainment|3224
+G-jEOohvJC4|Entertainment|2473
+e1e5o3etzN0|Sports|2116
+ljZOHnZNaBc| UNA |2010
+KzjaRPBXM7o|Comedy|2006
+ZCHVbeU8RzE|Comedy|1933
+Rg6463aqOyA|Gadgets &amp; Games|1846
+FHDk0sy4x7A|Entertainment|1829</div><p class="rn">10 rows total</p>
+</section>
+<section class="job" id="pig3">
+<h3>Pig-3 · Top 10 Viewed Videos</h3>
+<p class="desc">Order all videos by views, keep the top 10 → (videoID, category, views).</p>
+<p class="lbl">Pig script</p>
+<details class="code"><summary>📄 top10Viewed.pig</summary><div class="filewrap"><pre>infiles = load &#x27;/youtube/youtube.csv&#x27; using PigStorage(&#x27;,&#x27;) as (videoid:chararray,uploader:chararray,age:int,category:chararray,length:int,views:int,rate:float,rating:int,comments:int);
+files = FILTER infiles BY category is not null;
+grp_all = GROUP files ALL;
+top10 = FOREACH grp_all {
+    srt = ORDER files BY views DESC;
+    lim = LIMIT srt 10;
+    GENERATE FLATTEN(lim);
+};
+final_top10_viewed_video = FOREACH top10 GENERATE $0, $3, $5;
+STORE final_top10_viewed_video INTO &#x27;Top10Viewed.txt&#x27; USING PigStorage(&#x27;|&#x27;);</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>pig -x mapreduce -f top10Viewed.pig</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat Top10Viewed.txt/part-*</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">2026-08-19 14:46:25,870 [main] INFO  org.apache.pig.tools.pigstats.ScriptState - Pig features used in the script: GROUP_BY,FILTER
+2026-08-19 14:46:27,497 [JobControl] INFO  org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil - Total input paths to process : 1
+Success!
+Input(s):
+Successfully read 10296 records (564189 bytes) from: &quot;/youtube/youtube.csv&quot;
+Output(s):
+Total records written : 10
+2026-08-19 14:46:54,593 [main] INFO  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher - Success!</div>
+<p class="lbl">Result</p>
+<div class="out res">DQRVFILbEi4|Entertainment|2055258
+e1e5o3etzN0|Sports|1072238
+XvG3IK-hzRs|Entertainment|1006382
+ljZOHnZNaBc| UNA |892033
+W69CdqwJIHU|Comedy|715653
+en3CUhhEwOU|Comedy|686016
+Rg6463aqOyA|Gadgets &amp; Games|668112
+jvvKYpibTCE|Comedy|569933
+msbbH8rzTcQ|Entertainment|564033
+nFiJ3nioBa4|Music|562702</div><p class="rn">10 rows total</p>
+</section>
+<section class="job" id="pig4">
+<h3>Pig-4 · Top 10 Rated Videos by Category</h3>
+<p class="desc">Group by category; inside each group sort by ratings and keep the top 10 (nested FOREACH).</p>
+<p class="lbl">Pig script</p>
+<details class="code"><summary>📄 top10RatedByCategories.pig</summary><div class="filewrap"><pre>infiles = load &#x27;/youtube/youtube.csv&#x27; using PigStorage(&#x27;,&#x27;) as 
+(videoid:chararray,uploader:chararray,age:int,category:chararray,length:int,views:int,rate:float,rating:int,comments:int,related_id:chararray);
+files = FILTER infiles BY category is not null;
+grpn_for_catagories = group files by category;
+top10_rated_catagories = foreach grpn_for_catagories{
+                           sorted = order files by rating desc;
+                           top10 = limit sorted 10;
+                           generate flatten(top10);
+};
+top10_rated_by_catagories = foreach top10_rated_catagories generate $0,$3,$7;
+STORE top10_rated_by_catagories INTO &#x27;Top10RatedByCatagories.txt&#x27; using PigStorage(&#x27;|&#x27;);</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>pig -x mapreduce -f top10RatedByCategories.pig</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat Top10RatedByCatagories.txt/part-*</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">2026-08-19 14:47:13,258 [main] INFO  org.apache.pig.tools.pigstats.ScriptState - Pig features used in the script: GROUP_BY,FILTER
+2026-08-19 14:47:14,611 [JobControl] INFO  org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil - Total input paths to process : 1
+Success!
+Input(s):
+Successfully read 10296 records (564189 bytes) from: &quot;/youtube/youtube.csv&quot;
+Output(s):
+Total records written : 130
+2026-08-19 14:47:41,424 [main] INFO  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher - Success!</div>
+<p class="lbl">Result</p>
+<div class="out res">ljZOHnZNaBc| UNA |2010
+giizTfYqKWk| UNA |1615
+bw865s8WzNQ| UNA |392
+nbCo3_7VdwE| UNA |251
+vKqOWLtq1vw| UNA |229
+3Y36nYS_GQU| UNA |227
+2XxO9uksW3E| UNA |219
+2CCwo2rWyd0| UNA |210
+qr2tBk9XiPM| UNA |163
+0OoKUujFQ5U| UNA |159
+vtE6VKSiVkA|Music|1798
+RaeF00sqW34|Music|1509
+Le6PLp3ARv4|Music|1210
+-ZNESkRhoy4|Music|1103
+… (116 more rows)</div><p class="rn">130 rows total</p>
+</section>
+<section class="job" id="pig5">
+<h3>Pig-5 · Top 10 Viewed Videos by Category</h3>
+<p class="desc">Group by category; inside each group sort by views and keep the top 10 (nested FOREACH).</p>
+<p class="lbl">Pig script</p>
+<details class="code"><summary>📄 top10ViewedByCategories.pig</summary><div class="filewrap"><pre>infiles = load &#x27;/youtube/youtube.csv&#x27; using PigStorage(&#x27;,&#x27;) as 
+(videoid:chararray,uploader:chararray,age:int,category:chararray,length:int,views:int,rate:float,rating:int,comments:int,related_id:chararray);
+files = FILTER infiles BY category is not null;
+grpn_for_catagories = group files by category;
+top10_viewed_catagories = foreach grpn_for_catagories{
+                           sorted = order files by views desc;
+                           top10 = limit sorted 10;
+                           generate flatten(top10);
+};
+top10_viewed_by_catagories = foreach top10_viewed_catagories generate $0,$3,$5;
+STORE top10_viewed_by_catagories INTO &#x27;Top10ViewedByCatagories.txt&#x27; using PigStorage(&#x27;|&#x27;);</pre><button class="copy" data-src="pre">copy</button></div></details>
+<p class="lbl">Run</p>
+<div class="cmd"><code>pig -x mapreduce -f top10ViewedByCategories.pig</code><button class="copy" data-src="code">copy</button></div>
+<div class="cmd"><code>hdfs dfs -cat Top10ViewedByCatagories.txt/part-*</code><button class="copy" data-src="code">copy</button></div>
+<p class="lbl">Execution log</p>
+<div class="out log">2026-08-19 14:47:49,119 [main] INFO  org.apache.pig.tools.pigstats.ScriptState - Pig features used in the script: GROUP_BY,FILTER
+2026-08-19 14:47:50,932 [JobControl] INFO  org.apache.pig.backend.hadoop.executionengine.util.MapRedUtil - Total input paths to process : 1
+Success!
+Input(s):
+Successfully read 10296 records (564189 bytes) from: &quot;/youtube/youtube.csv&quot;
+Output(s):
+Total records written : 130
+2026-08-19 14:48:18,033 [main] INFO  org.apache.pig.backend.hadoop.executionengine.mapReduceLayer.MapReduceLauncher - Success!</div>
+<p class="lbl">Result</p>
+<div class="out res">ljZOHnZNaBc| UNA |892033
+giizTfYqKWk| UNA |345260
+vKqOWLtq1vw| UNA |277940
+3Y36nYS_GQU| UNA |252131
+QcqRSfYUfYI| UNA |192974
+yjpY4xVt4ig| UNA |142838
+BQAX4txJvZ8| UNA |136161
+0OoKUujFQ5U| UNA |133659
+zica82hjL8M| UNA |101780
+l0E6Cmw-Nlk| UNA |98795
+nFiJ3nioBa4|Music|562702
+RaeF00sqW34|Music|422737
+iegH_5fWWUo|Music|388572
+ed6nrDCHQ4k|Music|303864
+… (116 more rows)</div><p class="rn">130 rows total</p>
+</section>
+
+<footer>
+ Lab report generated from live runs on Hadoop 3.4.1 · Apache Pig 0.17.0 · OpenJDK 11.
+ Reference code: <a href="https://github.com/SiddhiPrabhu1995/YouTube-Data-Analysis-using-Hadoop">SiddhiPrabhu1995/YouTube-Data-Analysis-using-Hadoop</a>.
+ Dataset: <a href="https://netsg.cs.sfu.ca/youtubedata/">SFU YouTube dataset</a>.
+</footer>
+
+<script>
+document.querySelectorAll('.copy').forEach(function(btn){
+  btn.addEventListener('click',function(){
+    var wrap=btn.closest('.cmd')||btn.closest('.filewrap');
+    var el=wrap.querySelector(btn.dataset.src);
+    var t=el.innerText;
+    function done(){var o=btn.textContent;btn.textContent='✓ copied';setTimeout(function(){btn.textContent=o;},1200);}
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(done,function(){fb(t);done();});}
+    else{fb(t);done();}
+  });
+});
+function fb(t){var a=document.createElement('textarea');a.value=t;document.body.appendChild(a);a.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(a);}
+</script>
+</body></html>
